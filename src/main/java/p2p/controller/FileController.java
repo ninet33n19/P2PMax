@@ -91,23 +91,26 @@ public class FileController {
 
         public ParseResult parse() {
             try {
-                String dataAsString = new String(data);
+                byte[] headerSeparator = { 13, 10, 13, 10 }; // \r\n\r\n
+                int headerEnd = findSequence(data, headerSeparator, 0);
+                if (headerEnd == -1) {
+                    return null;
+                }
+
+                String headers = new String(data, 0, headerEnd);
 
                 String filenameMarker = "filename=\"";
-                int filenameStart = dataAsString.indexOf(filenameMarker);
+                int filenameStart = headers.indexOf(filenameMarker);
                 if (filenameStart == -1) {
                     return null;
                 }
 
                 filenameStart += filenameMarker.length();
-                int filenameEnd = dataAsString.indexOf("\"", filenameStart);
-                String filename = dataAsString.substring(
-                    filenameStart,
-                    filenameEnd
-                );
+                int filenameEnd = headers.indexOf("\"", filenameStart);
+                String filename = headers.substring(filenameStart, filenameEnd);
 
                 String contentTypeMarker = "Content-Type: ";
-                int contentTypeStart = dataAsString.indexOf(
+                int contentTypeStart = headers.indexOf(
                     contentTypeMarker,
                     filenameEnd
                 );
@@ -115,23 +118,17 @@ public class FileController {
 
                 if (contentTypeStart != -1) {
                     contentTypeStart += contentTypeMarker.length();
-                    int contentTypeEnd = dataAsString.indexOf(
+                    int contentTypeEnd = headers.indexOf(
                         "\r\n",
                         contentTypeStart
                     );
-                    contentType = dataAsString.substring(
+                    contentType = headers.substring(
                         contentTypeStart,
                         contentTypeEnd
                     );
                 }
 
-                String headerEndMarker = "\r\n\r\n";
-                int headerEnd = dataAsString.indexOf(headerEndMarker);
-                if (headerEnd == -1) {
-                    return null;
-                }
-
-                int contentStart = headerEnd + headerEndMarker.length();
+                int contentStart = headerEnd + headerSeparator.length;
 
                 byte[] boundaryBytes = ("\r\n--" + boundary + "--").getBytes();
                 int contentEnd = findSequence(
