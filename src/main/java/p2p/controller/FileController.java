@@ -7,6 +7,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -92,78 +93,80 @@ public class FileController {
         public ParseResult parse() {
             try {
                 byte[] headerSeparator = { 13, 10, 13, 10 }; // \r\n\r\n
-                int headerEnd = findSequence(data, headerSeparator, 0);
-                if (headerEnd == -1) {
+                int headerEndIndex = findSequence(data, headerSeparator, 0);
+                if (headerEndIndex == -1) {
+                    return null;
+                }
+                int contentStartIndex = headerEndIndex + headerSeparator.length;
+
+                String headers = new String(data, 0, headerEndIndex);
+
+                byte[] boundarySeparator =
+                    ("\r\n--" + this.boundary).getBytes();
+                int contentEndIndex = findSequence(
+                    data,
+                    boundarySeparator,
+                    contentStartIndex
+                );
+
+                if (contentEndIndex == -1) {
+                    boundarySeparator = ("\r\n--" +
+                        this.boundary +
+                        "--").getBytes();
+                    contentEndIndex = findSequence(
+                        data,
+                        boundarySeparator,
+                        contentStartIndex
+                    );
+                }
+
+                if (contentEndIndex == -1) {
                     return null;
                 }
 
-                String headers = new String(data, 0, headerEnd);
+                byte[] fileContent = Arrays.copyOfRange(
+                    data,
+                    contentStartIndex,
+                    contentEndIndex
+                );
 
+                String filename = "unnamed-file"; // Default
                 String filenameMarker = "filename=\"";
                 int filenameStart = headers.indexOf(filenameMarker);
-                if (filenameStart == -1) {
-                    return null;
+                if (filenameStart != -1) {
+                    filenameStart += filenameMarker.length();
+                    int filenameEnd = headers.indexOf("\"", filenameStart);
+                    if (filenameEnd != -1) {
+                        filename = headers.substring(
+                            filenameStart,
+                            filenameEnd
+                        );
+                    }
                 }
 
-                filenameStart += filenameMarker.length();
-                int filenameEnd = headers.indexOf("\"", filenameStart);
-                String filename = headers.substring(filenameStart, filenameEnd);
-
-                String contentTypeMarker = "Content-Type: ";
-                int contentTypeStart = headers.indexOf(
-                    contentTypeMarker,
-                    filenameEnd
-                );
                 String contentType = "application/octet-stream"; // Default
-
+                String contentTypeMarker = "Content-Type: ";
+                int contentTypeStart = headers.indexOf(contentTypeMarker);
                 if (contentTypeStart != -1) {
                     contentTypeStart += contentTypeMarker.length();
                     int contentTypeEnd = headers.indexOf(
                         "\r\n",
                         contentTypeStart
                     );
-                    contentType = headers.substring(
-                        contentTypeStart,
-                        contentTypeEnd
-                    );
+                    if (contentTypeEnd != -1) {
+                        contentType = headers.substring(
+                            contentTypeStart,
+                            contentTypeEnd
+                        );
+                    }
                 }
-
-                int contentStart = headerEnd + headerSeparator.length;
-
-                byte[] boundaryBytes = ("\r\n--" + boundary + "--").getBytes();
-                int contentEnd = findSequence(
-                    data,
-                    boundaryBytes,
-                    contentStart
-                );
-
-                if (contentEnd == -1) {
-                    boundaryBytes = ("\r\n--" + boundary).getBytes();
-                    contentEnd = findSequence(
-                        data,
-                        boundaryBytes,
-                        contentStart
-                    );
-                }
-
-                if (contentEnd == -1 || contentEnd <= contentStart) {
-                    return null;
-                }
-
-                byte[] fileContent = new byte[contentEnd - contentStart];
-                System.arraycopy(
-                    data,
-                    contentStart,
-                    fileContent,
-                    0,
-                    fileContent.length
-                );
 
                 return new ParseResult(filename, contentType, fileContent);
             } catch (Exception e) {
                 System.err.println(
                     "Error parsing multipart data: " + e.getMessage()
                 );
+                e.printStackTrace(); // Keep this for debugging
                 return null;
             }
         }
