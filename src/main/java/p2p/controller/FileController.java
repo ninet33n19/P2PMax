@@ -130,7 +130,7 @@ public class FileController {
                     contentEndIndex
                 );
 
-                String filename = "unnamed-file"; // Default
+                String filename = "unnamed-file";
                 String filenameMarker = "filename=\"";
                 int filenameStart = headers.indexOf(filenameMarker);
                 if (filenameStart != -1) {
@@ -144,7 +144,7 @@ public class FileController {
                     }
                 }
 
-                String contentType = "application/octet-stream"; // Default
+                String contentType = "application/octet-stream";
                 String contentTypeMarker = "Content-Type: ";
                 int contentTypeStart = headers.indexOf(contentTypeMarker);
                 if (contentTypeStart != -1) {
